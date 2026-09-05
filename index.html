@@ -19,8 +19,66 @@ button{font:inherit}.primary{background:#111827;color:white;border:0;border-radi
 .modal{position:fixed;inset:0;background:#0007;display:none;z-index:20;padding:18px}.modal.show{display:flex;align-items:flex-end}.sheet{background:white;border-radius:18px 18px 0 0;width:100%;max-height:85vh;overflow:auto;padding:16px}.sheet h2{margin-top:0}.sheet input,.sheet select{width:100%;padding:12px;margin:5px 0;border:1px solid #d1d5db;border-radius:10px;font-size:16px}.actions{display:flex;gap:8px;margin-top:10px}.actions button{flex:1}
 @media(min-width:650px){.modal.show{align-items:center;justify-content:center}.sheet{max-width:520px;border-radius:18px}}
 </style>
+
+<style>
+  #access-lock {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #f5f5f5;
+  }
+  #access-lock.hidden { display: none; }
+  .access-card {
+    width: min(100%, 380px);
+    padding: 28px;
+    border-radius: 20px;
+    background: white;
+    box-shadow: 0 10px 35px rgba(0,0,0,.12);
+    text-align: center;
+  }
+  .access-card h1 { margin: 0 0 8px; font-size: 24px; }
+  .access-card p { margin: 0 0 20px; color: #666; }
+  #access-code {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px 16px;
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    font-size: 18px;
+    text-align: center;
+    letter-spacing: 3px;
+  }
+  #unlock-app {
+    width: 100%;
+    margin-top: 12px;
+    padding: 14px 16px;
+    border: 0;
+    border-radius: 12px;
+    font-size: 17px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  #access-error { min-height: 22px; margin-top: 10px; color: #b00020; font-size: 14px; }
+</style>
+
 </head>
 <body>
+
+<div id="access-lock">
+  <div class="access-card">
+    <h1>🔒 Private App</h1>
+    <p>Enter the family access code to continue.</p>
+    <input id="access-code" type="password" inputmode="numeric" autocomplete="off"
+           placeholder="Access code" aria-label="Family access code">
+    <button id="unlock-app" type="button">Unlock</button>
+    <div id="access-error" role="alert"></div>
+  </div>
+</div>
+
 <header>
 <h1>PAK'nSAVE Grocery Route</h1>
 <div class="tabs">
@@ -124,4 +182,41 @@ document.getElementById("tabRoute").onclick=()=>{window.view="route";setTabs();r
 function setTabs(){document.querySelectorAll(".tab").forEach(b=>b.classList.remove("active"));document.getElementById(window.view==="master"?"tabMaster":window.view==="route"?"tabRoute":"tabShop").classList.add("active")}
 window.view="shop";render();
 </script>
+
+<script>
+(() => {
+  // Family testing access code. Change this before wider distribution.
+  const FAMILY_ACCESS_CODE = "2580";
+  const ACCESS_KEY = "paknsave_family_access_granted";
+
+  const lock = document.getElementById("access-lock");
+  const input = document.getElementById("access-code");
+  const button = document.getElementById("unlock-app");
+  const error = document.getElementById("access-error");
+
+  function unlock() {
+    if (input.value === FAMILY_ACCESS_CODE) {
+      localStorage.setItem(ACCESS_KEY, "1");
+      lock.classList.add("hidden");
+      document.body.style.overflow = "";
+    } else {
+      error.textContent = "Incorrect access code.";
+      input.select();
+    }
+  }
+
+  if (localStorage.getItem(ACCESS_KEY) === "1") {
+    lock.classList.add("hidden");
+  } else {
+    document.body.style.overflow = "hidden";
+    setTimeout(() => input.focus(), 100);
+  }
+
+  button.addEventListener("click", unlock);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") unlock();
+  });
+})();
+</script>
+
 </body></html>
