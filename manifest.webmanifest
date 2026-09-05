@@ -1,0 +1,9 @@
+{
+  "name": "PAK'nSAVE Grocery Route",
+  "short_name": "Grocery Route",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f4f6",
+  "theme_color": "#111827",
+  "icons": []
+}
