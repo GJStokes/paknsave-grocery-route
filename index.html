@@ -128,11 +128,25 @@ if(!state.lastRoutesByStore){
     if(Array.isArray(r) && r.length) state.lastRoutesByStore[st]=[...r];
   }
 }
+// Cumulative pairwise ordering history. A|B means A was bought before B.
+// Older versions stored only adjacent pairs; those are retained as useful legacy evidence.
+if(!state.orderStatsByStore){
+  state.orderStatsByStore={};
+  for(const [st,pairs] of Object.entries(state.pairsByStore||{})){
+    state.orderStatsByStore[st]={...(pairs||{})};
+  }
+}
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
-function routeScore(id,store){
- let score=0; const pairs=state.pairsByStore[store]||{};
- for(const k in pairs){ if(k.startsWith(id+"|")) score+=pairs[k]; if(k.endsWith("|"+id)) score-=pairs[k]; }
+function pairwiseLearningScore(id,store,selected){
+ const stats=state.orderStatsByStore[store]||{};
+ let score=0;
+ for(const other of selected){
+   if(other===id)continue;
+   const forward=stats[id+"|"+other]||0;
+   const reverse=stats[other+"|"+id]||0;
+   if(forward||reverse) score += forward-reverse;
+ }
  return score;
 }
 function sortedSelectedByStore(store){
@@ -140,14 +154,17 @@ function sortedSelectedByStore(store){
  const learned=state.lastRoutesByStore[store]&&state.lastRoutesByStore[store].length
    ? state.lastRoutesByStore[store]
    : (state.routesByStore[store]||[]);
- const pos=new Map(learned.map((id,i)=>[id,i]));
+ const lastPos=new Map(learned.map((id,i)=>[id,i]));
  return selected.sort((a,b)=>{
-   const ap=pos.has(a.id)?pos.get(a.id):Number.POSITIVE_INFINITY;
-   const bp=pos.has(b.id)?pos.get(b.id):Number.POSITIVE_INFINITY;
+   // Primary sort: cumulative evidence from all completed shopping trips.
+   const as=pairwiseLearningScore(a.id,store,selected.map(x=>x.id));
+   const bs=pairwiseLearningScore(b.id,store,selected.map(x=>x.id));
+   if(as!==bs)return bs-as;
+   // Only use the latest route to break a genuine cumulative tie.
+   const ap=lastPos.has(a.id)?lastPos.get(a.id):Number.POSITIVE_INFINITY;
+   const bp=lastPos.has(b.id)?lastPos.get(b.id):Number.POSITIVE_INFINITY;
    if(ap!==bp)return ap-bp;
-   if(ap!==Number.POSITIVE_INFINITY && bp!==Number.POSITIVE_INFINITY)return 0;
-   const as=routeScore(a.id,store), bs=routeScore(b.id,store);
-   return as-bs||a.name.localeCompare(b.name,undefined,{sensitivity:"base"});
+   return a.name.localeCompare(b.name,undefined,{sensitivity:"base"});
  });
 }
 function selectedStores(){
@@ -170,6 +187,25 @@ function recordBuy(id){
  if(prev&&prev!==id){const k=prev+"|"+id;pairs[k]=(pairs[k]||0)+1}
  route.push(id);
  it.bought=true;
+ // When the whole weekly shop is finished, convert each store's completed
+ // route into cumulative pairwise evidence. This is what makes the app learn
+ // from repeated behaviour rather than simply copying the latest trip.
+ const remaining=state.items.some(x=>x.selected&&!x.bought);
+ if(!remaining){
+   for(const [st,r] of Object.entries(state.routesByStore||{})){
+     if(!Array.isArray(r) || r.length<2)continue;
+     if(!state.orderStatsByStore[st])state.orderStatsByStore[st]={};
+     const stats=state.orderStatsByStore[st];
+     for(let i=0;i<r.length;i++){
+       for(let j=i+1;j<r.length;j++){
+         if(r[i]===r[j])continue;
+         const k=r[i]+"|"+r[j];
+         stats[k]=(stats[k]||0)+1;
+       }
+     }
+     state.lastRoutesByStore[st]=[...r];
+   }
+ }
  save();render();
 }
 function render(){
@@ -179,11 +215,14 @@ function render(){
  else renderShop(app);
 }
 function renderShop(app){
- const sel=state.items.filter(x=>x.selected), bought=sel.filter(x=>x.bought).length;
- app.innerHTML=`<div class="stats"><div class="stat"><b>${sel.length}</b>Items</div><div class="stat"><b>${bought}</b>Bought</div><div class="stat"><b>${sel.length-bought}</b>Left</div></div>
+ const allSel=state.items.filter(x=>x.selected);
+ const bought=allSel.filter(x=>x.bought).length;
+ const sel=allSel.filter(x=>!x.bought);
+ const stores=[...new Set(sel.map(x=>x.shopStore||x.store||"PAK'nSAVE"))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+ app.innerHTML=`<div class="stats"><div class="stat"><b>${allSel.length}</b>Items</div><div class="stat"><b>${bought}</b>Bought</div><div class="stat"><b>${sel.length}</b>Left</div></div>
  <div class="bar"><input id="search" placeholder="Search this week's shop…"><button class="primary" onclick="openAdd()">Add</button></div>
  <div class="bar"><button class="secondary" onclick="selectAll(false)">Clear shop</button><button class="secondary" onclick="resetBought()">New trip</button></div>
- ${sel.length?selectedStores().map(store=>{const items=sortedSelectedByStore(store);return `<div class="section"><h2>${esc(store)}</h2>${items.map(itemCard).join("")}</div>`}).join(""):`<div class="empty">Your weekly shop is empty.<br><br>Go to <b>Master List</b> and tap items to add them.</div>`}`;
+ ${sel.length?stores.map(store=>{const items=sortedSelectedByStore(store).filter(x=>!x.bought);return items.length?`<div class="section"><h2>${esc(store)}</h2>${items.map(itemCard).join("")}</div>`:""}).join(""):`<div class="empty">${allSel.length?"All items bought! 🎉<br><br>Tap <b>New trip</b> to restore this week's list, or go to <b>Master List</b> to add more items.":"Your weekly shop is empty.<br><br>Go to <b>Master List</b> and tap items to add them."}</div>`}`;
  document.getElementById("search").oninput=e=>filterCards(e.target.value);
 }
 function itemCard(x){
@@ -224,10 +263,8 @@ function setUnit(id,v){const x=state.items.find(x=>x.id===id);x.shopUnit=v;x.usu
 function setShopStore(id,v){const x=state.items.find(x=>x.id===id);if(!x)return;const store=ensureStore(v);x.shopStore=store;x.bought=false;save();render()}
 function buy(id){recordBuy(id)}
 function resetBought(){
-  // Finish the current shopping trip without deleting learned routes.
-  for(const [store,route] of Object.entries(state.routesByStore||{})){
-    if(Array.isArray(route) && route.length) state.lastRoutesByStore[store]=[...route];
-  }
+  // Start another shopping trip without deleting cumulative learning or the
+  // last fully completed route for each store.
   state.items.forEach(x=>x.bought=false);
   state.routesByStore={};
   state.route=[];
@@ -235,7 +272,7 @@ function resetBought(){
   save();
   render();
 }
-function clearRoute(){if(confirm("Clear all learned store routes? Your Master List, stores and quantities will stay.")){state.routesByStore={};state.pairsByStore={};state.route=[];state.pairs={};save();render()}}
+function clearRoute(){if(confirm("Clear all learned store routes? Your Master List, stores and quantities will stay.")){state.routesByStore={};state.pairsByStore={};state.orderStatsByStore={};state.lastRoutesByStore={};state.route=[];state.pairs={};save();render()}}
 function editItem(id){
   const x=state.items.find(x=>x.id===id);
   if(!x)return;
@@ -351,6 +388,8 @@ function renameStore(oldName){
   state.stores=state.stores.map(st=>st===current?name:st);
   if(state.routesByStore[current]){state.routesByStore[name]=state.routesByStore[current];delete state.routesByStore[current]}
   if(state.pairsByStore[current]){state.pairsByStore[name]=state.pairsByStore[current];delete state.pairsByStore[current]}
+  if(state.orderStatsByStore[current]){state.orderStatsByStore[name]=state.orderStatsByStore[current];delete state.orderStatsByStore[current]}
+  if(state.lastRoutesByStore[current]){state.lastRoutesByStore[name]=state.lastRoutesByStore[current];delete state.lastRoutesByStore[current]}
   state.items.forEach(x=>{
     if(x.store===current)x.store=name;
     if(x.shopStore===current)x.shopStore=name;
@@ -366,6 +405,8 @@ function deleteStore(name){
   state.stores=state.stores.filter(st=>st!==name);
   delete state.routesByStore[name];
   delete state.pairsByStore[name];
+  delete state.orderStatsByStore[name];
+  delete state.lastRoutesByStore[name];
   save();
   openStoreManager();
 }
