@@ -120,6 +120,14 @@ if(!state.pairsByStore){
   state.pairsByStore={};
   if(state.pairs&&typeof state.pairs==='object')state.pairsByStore["PAK'nSAVE"]={...state.pairs};
 }
+// Keep a separate copy of the last completed trip so a new trip can start
+// without losing the route that should be used as the starting suggestion.
+if(!state.lastRoutesByStore){
+  state.lastRoutesByStore={};
+  for(const [st,r] of Object.entries(state.routesByStore||{})){
+    if(Array.isArray(r) && r.length) state.lastRoutesByStore[st]=[...r];
+  }
+}
 function save(){localStorage.setItem(KEY,JSON.stringify(state))}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function routeScore(id,store){
@@ -128,7 +136,19 @@ function routeScore(id,store){
  return score;
 }
 function sortedSelectedByStore(store){
- return state.items.filter(x=>x.selected&&(x.shopStore||x.store||"PAK'nSAVE")===store).sort((a,b)=>routeScore(a.id,store)-routeScore(b.id,store)||a.name.localeCompare(b.name,undefined,{sensitivity:"base"}));
+ const selected=state.items.filter(x=>x.selected&&(x.shopStore||x.store||"PAK'nSAVE")===store);
+ const learned=state.lastRoutesByStore[store]&&state.lastRoutesByStore[store].length
+   ? state.lastRoutesByStore[store]
+   : (state.routesByStore[store]||[]);
+ const pos=new Map(learned.map((id,i)=>[id,i]));
+ return selected.sort((a,b)=>{
+   const ap=pos.has(a.id)?pos.get(a.id):Number.POSITIVE_INFINITY;
+   const bp=pos.has(b.id)?pos.get(b.id):Number.POSITIVE_INFINITY;
+   if(ap!==bp)return ap-bp;
+   if(ap!==Number.POSITIVE_INFINITY && bp!==Number.POSITIVE_INFINITY)return 0;
+   const as=routeScore(a.id,store), bs=routeScore(b.id,store);
+   return as-bs||a.name.localeCompare(b.name,undefined,{sensitivity:"base"});
+ });
 }
 function selectedStores(){
  return [...new Set(state.items.filter(x=>x.selected).map(x=>x.shopStore||x.store||"PAK'nSAVE"))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
@@ -191,7 +211,7 @@ function renderRoute(app){
  const stores=[...new Set(state.items.filter(x=>x.selected).map(x=>x.shopStore||x.store||"PAK'nSAVE"))].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
  const sections=stores.length?stores.map(store=>{
    const selected=sortedSelectedByStore(store);
-   const route=state.routesByStore[store]||[];
+   const route=(state.lastRoutesByStore[store]&&state.lastRoutesByStore[store].length) ? state.lastRoutesByStore[store] : (state.routesByStore[store]||[]);
    return `<div class="card"><b>${esc(store)}</b><p class="muted">Latest recorded trip</p><p>${route.length?route.map((id,i)=>`${i+1}. ${esc(state.items.find(x=>x.id===id)?.name||id)}`).join("<br>"):"No shopping trip recorded yet."}</p><p class="muted">Current suggested order</p><p>${selected.length?selected.map((x,i)=>`${i+1}. ${esc(x.name)}`).join("<br>"):"No selected items for this store."}</p></div>`;
  }).join(""):`<div class="card"><p>Select items in Master List first.</p></div>`;
  app.innerHTML=`<div class="card"><b>How route learning works</b><p class="muted">The app learns your shopping order separately for each store. Just tap ✓ as you shop. PAK'nSAVE, Woolworths and each specialty store can develop their own route without mixing them together.</p></div>${sections}<button class="primary" onclick="clearRoute()">Clear learned routes</button>`;
@@ -203,7 +223,18 @@ function setQty(id,v){const x=state.items.find(x=>x.id===id);x.shopQty=v;x.usual
 function setUnit(id,v){const x=state.items.find(x=>x.id===id);x.shopUnit=v;x.usualUnit=v;save()}
 function setShopStore(id,v){const x=state.items.find(x=>x.id===id);if(!x)return;const store=ensureStore(v);x.shopStore=store;x.bought=false;save();render()}
 function buy(id){recordBuy(id)}
-function resetBought(){state.items.forEach(x=>x.bought=false);state.routesByStore={};state.route=[];state.shopStarted=null;save();render()}
+function resetBought(){
+  // Finish the current shopping trip without deleting learned routes.
+  for(const [store,route] of Object.entries(state.routesByStore||{})){
+    if(Array.isArray(route) && route.length) state.lastRoutesByStore[store]=[...route];
+  }
+  state.items.forEach(x=>x.bought=false);
+  state.routesByStore={};
+  state.route=[];
+  state.shopStarted=null;
+  save();
+  render();
+}
 function clearRoute(){if(confirm("Clear all learned store routes? Your Master List, stores and quantities will stay.")){state.routesByStore={};state.pairsByStore={};state.route=[];state.pairs={};save();render()}}
 function editItem(id){
   const x=state.items.find(x=>x.id===id);
