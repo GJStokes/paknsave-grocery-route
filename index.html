@@ -144,6 +144,7 @@ function renderMaster(app){
  <button class="buy ${x.selected?"done":""}" onclick="toggleSelect('${esc(x.id)}')">${x.selected?"✓":"+"}</button>
  <div class="itemname">${esc(x.name)}<div class="cat">${esc(x.shopQty)} ${esc(x.shopUnit)} · usual ${esc(x.usualQty)} ${esc(x.usualUnit)}</div></div>
  <button class="secondary" onclick="editItem('${esc(x.id)}')">Edit</button>
+<button class="secondary" onclick="deleteItem('${esc(x.id)}')">Delete</button>
  </div></div>`).join("")}</div>`).join("")}`;
  document.getElementById("search").oninput=e=>filterCards(e.target.value);
 }
@@ -166,6 +167,18 @@ function editItem(id){
  const x=state.items.find(x=>x.id===id);
  document.getElementById("sheet").innerHTML=`<h2>Edit item</h2><input id="eiName" value="${esc(x.name)}"><input id="eiQty" type="number" min="0" step="any" value="${esc(x.usualQty)}"><select id="eiUnit">${["each","bunch","kg","g","pack","bag","box","tin","jar","tub","bottle","loaf","tube","roll","pair","dozen","litre","ml"].map(u=>`<option ${u===x.usualUnit?"selected":""}>${u}</option>`).join("")}</select><div class="actions"><button class="secondary" onclick="closeModal()">Cancel</button><button class="primary" onclick="saveEdit('${esc(id)}')">Save</button></div>`;
  openModal();
+}function deleteItem(id){
+  const x=state.items.find(x=>x.id===id);
+  if(!x)return;
+  if(confirm(`Delete "${x.name}" from the Master List?`)){
+    state.items=state.items.filter(i=>i.id!==id);
+    state.route=state.route.filter(i=>i!==id);
+    for(const k of Object.keys(state.pairs)){
+      if(k.startsWith(id+"|")||k.endsWith("|"+id)) delete state.pairs[k];
+    }
+    save();
+    render();
+  }
 }
 function saveEdit(id){const x=state.items.find(x=>x.id===id);x.usualQty=document.getElementById("eiQty").value;x.shopQty=x.usualQty;x.usualUnit=document.getElementById("eiUnit").value;x.shopUnit=x.usualUnit;save();closeModal();render()}
 function openAdd(){
