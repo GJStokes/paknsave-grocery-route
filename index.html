@@ -14,7 +14,7 @@ main{max-width:760px;margin:auto;padding:12px 12px 100px}.bar{display:flex;gap:8
 button{font:inherit}.primary{background:#111827;color:white;border:0;border-radius:10px;padding:12px 14px;font-weight:700}.secondary{background:white;border:1px solid #d1d5db;border-radius:10px;padding:10px 12px}
 .card{background:white;border-radius:14px;margin:8px 0;padding:12px;box-shadow:0 1px 4px #0001}.row{display:flex;align-items:center;gap:10px}.itemname{font-weight:700;flex:1}.cat{font-size:12px;color:#6b7280;margin-top:3px}
 .buy{width:42px;height:42px;border-radius:12px;border:2px solid #9ca3af;background:white;font-size:20px}.buy.done{background:#111827;color:white;border-color:#111827}.qty{display:flex;align-items:center;gap:5px}.qty input{width:54px;text-align:center;padding:7px;border:1px solid #d1d5db;border-radius:8px}.qty select{padding:7px;border:1px solid #d1d5db;border-radius:8px;background:white}
-.section{margin-top:18px}.section h2{font-size:15px;margin:0 4px 7px;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}.storetag{font-size:12px;color:#374151;margin-top:3px;font-weight:600}.store-input{font:inherit;font-weight:600;border:1px solid #d1d5db;border-radius:8px;padding:3px 6px;max-width:180px;background:#fff}
+.section{margin-top:18px}.section h2{font-size:15px;margin:0 4px 7px;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}.storetag{font-size:12px;color:#374151;margin-top:3px;font-weight:600}.store-input{font:inherit;font-weight:600;border:1px solid #d1d5db;border-radius:8px;padding:3px 6px;max-width:180px;background:#fff}.item-open{border:0;background:transparent;padding:0;text-align:left;cursor:pointer;flex:1}.item-open:active{opacity:.7}
 .muted{color:#6b7280;font-size:13px}.empty{padding:30px;text-align:center;color:#6b7280}.stats{display:flex;gap:8px;margin-bottom:10px}.stat{background:white;border-radius:12px;padding:10px;flex:1;text-align:center}.stat b{display:block;font-size:20px}
 .modal{position:fixed;inset:0;background:#0007;display:none;z-index:20;padding:18px}.modal.show{display:flex;align-items:flex-end}.sheet{background:white;border-radius:18px 18px 0 0;width:100%;max-height:85vh;overflow:auto;padding:16px}.sheet h2{margin-top:0}.sheet input,.sheet select{width:100%;padding:12px;margin:5px 0;border:1px solid #d1d5db;border-radius:10px;font-size:16px}.actions{display:flex;gap:8px;margin-top:10px}.actions button{flex:1}
 @media(min-width:650px){.modal.show{align-items:center;justify-content:center}.sheet{max-width:520px;border-radius:18px}}
@@ -164,10 +164,9 @@ function renderShop(app){
  document.getElementById("search").oninput=e=>filterCards(e.target.value);
 }
 function itemCard(x){
- return `<div class="card item-card" data-name="${esc((x.name+" "+x.store).toLowerCase())}"><div class="row">
+ return `<div class="card item-card" data-name="${esc((x.name+" "+(x.shopStore||x.store||"PAK'nSAVE")).toLowerCase())}"><div class="row">
  <button class="buy ${x.bought?"done":""}" onclick="buy('${esc(x.id)}')">${x.bought?"✓":"○"}</button>
- <div class="itemname">${esc(x.name)}<div class="cat">${esc(x.category)}</div><div class="storetag">Store for this shop: <input class="store-input" list="shopStoreOptions-${esc(x.id)}" value="${esc(x.shopStore||x.store||"PAK'nSAVE")}" onchange="setShopStore('${esc(x.id)}',this.value)"><datalist id="shopStoreOptions-${esc(x.id)}">${state.stores.map(st=>`<option value="${esc(st)}"></option>`).join("")}</datalist></div></div>
- <div class="qty"><input type="number" min="0" step="any" value="${esc(x.shopQty)}" onchange="setQty('${esc(x.id)}',this.value)"><select onchange="setUnit('${esc(x.id)}',this.value)">${["each","bunch","kg","g","pack","bag","box","tin","jar","tub","bottle","loaf","tube","roll","pair","dozen","litre","ml"].map(u=>`<option ${u===x.shopUnit?"selected":""}>${u}</option>`).join("")}</select></div>
+ <button class="itemname item-open" type="button" onclick="openShopItem('${esc(x.id)}')">${esc(x.name)}<div class="cat">${esc(x.category)}</div><div class="storetag">${esc(x.shopQty)} ${esc(x.shopUnit)} · ${esc(x.shopStore||x.store||"PAK'nSAVE")}</div></button>
  </div></div>`;
 }
 function renderMaster(app){
@@ -178,7 +177,7 @@ function renderMaster(app){
  <p class="muted">Tap an item to include it in this week's shop. Quantities are saved automatically.</p>
  ${orderedGroups.map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
  <button class="buy ${x.selected?"done":""}" onclick="toggleSelect('${esc(x.id)}')">${x.selected?"✓":"+"}</button>
- <div class="itemname">${esc(x.name)}<div class="cat">${esc(x.shopQty)} ${esc(x.shopUnit)} · usual ${esc(x.usualQty)} ${esc(x.usualUnit)}</div><div class="storetag">Weekly shop store: <input class="store-input" list="masterStoreOptions-${esc(x.id)}" value="${esc(x.shopStore||x.store||"PAK'nSAVE")}" onchange="setShopStore('${esc(x.id)}',this.value)"><datalist id="masterStoreOptions-${esc(x.id)}">${state.stores.map(st=>`<option value="${esc(st)}"></option>`).join("")}</datalist></div></div>
+ <button class="itemname item-open" type="button" onclick="openShopItem('${esc(x.id)}')">${esc(x.name)}<div class="cat">${esc(x.shopQty)} ${esc(x.shopUnit)} · ${esc(x.shopStore||x.store||"PAK'nSAVE")}</div><div class="storetag">Tap item to set quantity & store</div></button>
  <button class="secondary" onclick="editItem('${esc(x.id)}')">Edit</button>
   <button class="secondary" onclick="deleteItem('${esc(x.id)}')">Delete</button>
  </div></div>`).join("")}</div>`).join("")}`;
@@ -285,6 +284,37 @@ function addItem(){
     id:name,name,category:cat,store,shopStore:store,usualQty:q,usualUnit:u,
     shopQty:q,shopUnit:u,selected:true,bought:false
   });
+  save();closeModal();render();
+}
+function openShopItem(id){
+  const x=state.items.find(x=>x.id===id);
+  if(!x)return;
+  const currentStore=x.shopStore||x.store||"PAK'nSAVE";
+  document.getElementById("sheet").innerHTML=`
+    <h2>${esc(x.name)}</h2>
+    <p class="muted">Set what you want to buy this week.</p>
+    <label class="muted">Amount</label>
+    <input id="siQty" type="number" min="0" step="any" value="${esc(x.shopQty||x.usualQty||1)}">
+    <select id="siUnit">
+      ${["each","bunch","kg","g","pack","bag","box","tin","jar","tub","bottle","loaf","tube","roll","pair","dozen","litre","ml"].map(u=>`<option ${u===(x.shopUnit||x.usualUnit) ? "selected" : ""}>${u}</option>`).join("")}
+    </select>
+    <label class="muted">Store</label>
+    <input id="siStore" list="shopStoreChoices" value="${esc(currentStore)}" placeholder="Store name">
+    <datalist id="shopStoreChoices">${state.stores.map(st=>`<option value="${esc(st)}"></option>`).join("")}</datalist>
+    <div class="actions">
+      <button class="secondary" onclick="closeModal()">Cancel</button>
+      <button class="primary" onclick="saveShopItem('${esc(id)}')">Save</button>
+    </div>`;
+  openModal();
+}
+function saveShopItem(id){
+  const x=state.items.find(x=>x.id===id);
+  if(!x)return;
+  x.shopQty=document.getElementById("siQty").value||"1";
+  x.shopUnit=document.getElementById("siUnit").value;
+  x.shopStore=ensureStore(document.getElementById("siStore").value);
+  x.selected=true;
+  x.bought=false;
   save();closeModal();render();
 }
 function openModal(){document.getElementById("modal").classList.add("show")}
