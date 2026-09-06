@@ -16,7 +16,7 @@ button{font:inherit}.primary{background:#111827;color:white;border:0;border-radi
 .buy{width:42px;height:42px;border-radius:12px;border:2px solid #9ca3af;background:white;font-size:20px}.buy.done{background:#111827;color:white;border-color:#111827}.qty{display:flex;align-items:center;gap:5px}.qty input{width:54px;text-align:center;padding:7px;border:1px solid #d1d5db;border-radius:8px}.qty select{padding:7px;border:1px solid #d1d5db;border-radius:8px;background:white}
 .section{margin-top:18px}.section h2{font-size:15px;margin:0 4px 7px;text-transform:uppercase;letter-spacing:.05em;color:#4b5563}.storetag{font-size:12px;color:#374151;margin-top:3px;font-weight:600}.store-input{font:inherit;font-weight:600;border:1px solid #d1d5db;border-radius:8px;padding:3px 6px;max-width:180px;background:#fff}.item-open{border:0;background:transparent;padding:0;text-align:left;cursor:pointer;flex:1}.item-open:active{opacity:.7}
 .muted{color:#6b7280;font-size:13px}.empty{padding:30px;text-align:center;color:#6b7280}.stats{display:flex;gap:8px;margin-bottom:10px}.stat{background:white;border-radius:12px;padding:10px;flex:1;text-align:center}.stat b{display:block;font-size:20px}
-.modal{position:fixed;inset:0;background:#0007;display:none;z-index:20;padding:18px}.modal.show{display:flex;align-items:flex-end}.sheet{background:white;border-radius:18px 18px 0 0;width:100%;max-height:85vh;overflow:auto;padding:16px}.sheet h2{margin-top:0}.sheet input,.sheet select{width:100%;padding:12px;margin:5px 0;border:1px solid #d1d5db;border-radius:10px;font-size:16px}.actions{display:flex;gap:8px;margin-top:10px}.actions button{flex:1}
+.modal{position:fixed;inset:0;background:#0007;display:none;z-index:20;padding:18px}.modal.show{display:flex;align-items:flex-end}.sheet{background:white;border-radius:18px 18px 0 0;width:100%;max-height:85vh;overflow:auto;padding:16px}.sheet h2{margin-top:0}.sheet input,.sheet select{width:100%;padding:12px;margin:5px 0;border:1px solid #d1d5db;border-radius:10px;font-size:16px}.actions{display:flex;gap:8px;margin-top:10px}.actions button{flex:1}.store-list{margin:10px 0}.store-row{display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #eee}.store-row span{flex:1;font-weight:600}.store-row button{padding:7px 10px}.store-add{display:flex;gap:8px;margin-top:12px}.store-add input{flex:1;margin:0}.store-add button{white-space:nowrap}
 @media(min-width:650px){.modal.show{align-items:center;justify-content:center}.sheet{max-width:520px;border-radius:18px}}
 </style>
 
@@ -173,7 +173,7 @@ function renderMaster(app){
  const groups={};
  state.items.forEach(x=>(groups[x.category]??=[]).push(x));
  const orderedGroups=CATEGORIES.filter(cat=>groups[cat]).map(cat=>[cat,groups[cat].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}))]);
- app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add</button></div>
+ app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add</button><button class="secondary" onclick="openStoreManager()">Stores</button></div>
  <p class="muted">Tap an item to include it in this week's shop. Quantities are saved automatically.</p>
  ${orderedGroups.map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
  <button class="buy ${x.selected?"done":""}" onclick="toggleSelect('${esc(x.id)}')">${x.selected?"✓":"+"}</button>
@@ -211,8 +211,11 @@ function editItem(id){
       ${CATEGORIES.map(c=>`<option ${c===x.category?"selected":""}>${esc(c)}</option>`).join("")}
     </select>
     <label class="muted">Store</label>
-    <input id="eiStore" list="storeOptions" value="${esc(x.store||"PAK'nSAVE")}" placeholder="Store name">
-    <datalist id="storeOptions">${state.stores.map(st=>`<option value="${esc(st)}"></option>`).join("")}</datalist>
+    <select id="eiStore" onchange="if(this.value==='__ADD_STORE__'){addStoreFromField('eiStore')}" >
+      ${state.stores.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"})).map(st=>`<option value="${esc(st)}" ${st===(x.store||"PAK'nSAVE")?"selected":""}>${esc(st)}</option>`).join("")}
+      <option value="__ADD_STORE__">＋ Add new store…</option>
+    </select>
+    <button class="secondary" type="button" onclick="addStoreFromField('eiStore')">＋ Add new store</button>
     <input id="eiQty" type="number" min="0" step="any" value="${esc(x.usualQty)}">
     <select id="eiUnit">
       ${["each","bunch","kg","g","pack","bag","box","tin","jar","tub","bottle","loaf","tube","roll","pair","dozen","litre","ml"].map(u=>`<option ${u===x.usualUnit?"selected":""}>${u}</option>`).join("")}
@@ -228,7 +231,8 @@ function saveEdit(id){
   if(!x)return;
   x.name=document.getElementById("eiName").value.trim()||x.name;
   x.category=document.getElementById("eiCat").value;
-  x.store=ensureStore(document.getElementById("eiStore").value); x.shopStore=x.store;
+  const editStoreValue=document.getElementById("eiStore").value;
+  if(editStoreValue!=="__ADD_STORE__") { x.store=ensureStore(editStoreValue); x.shopStore=x.store; }
   x.usualQty=document.getElementById("eiQty").value;
   x.shopQty=x.usualQty;
   x.usualUnit=document.getElementById("eiUnit").value;
@@ -247,14 +251,100 @@ function deleteItem(id){
     save();render();
   }
 }
+function addStoreFromField(fieldId){
+  const field=document.getElementById(fieldId);
+  const current=field && field.value!=="__ADD_STORE__" ? field.value : "";
+  const name=prompt("Enter the new store name:","");
+  if(name===null)return;
+  const clean=name.trim();
+  if(!clean){alert("Please enter a store name.");return;}
+  const existing=state.stores.find(st=>st.toLowerCase()===clean.toLowerCase());
+  if(existing){
+    ensureStore(existing);
+    if(field){
+      rebuildStoreSelect(fieldId,existing);
+    }
+    save();
+    return;
+  }
+  ensureStore(clean);
+  save();
+  rebuildStoreSelect(fieldId,clean);
+}
+function rebuildStoreSelect(fieldId,selected){
+  const field=document.getElementById(fieldId);
+  if(!field || field.tagName!=="SELECT")return;
+  const stores=state.stores.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+  field.innerHTML=stores.map(st=>`<option value="${esc(st)}" ${st===selected?"selected":""}>${esc(st)}</option>`).join("")+`<option value="__ADD_STORE__">＋ Add new store…</option>`;
+  field.value=selected;
+}
+
+function openStoreManager(){
+  const stores=[...state.stores].sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"}));
+  document.getElementById("sheet").innerHTML=`
+    <h2>Manage stores</h2>
+    <p class="muted">Add the places you shop. These stores will appear when you tap an item to set its amount and store.</p>
+    <div class="store-list">
+      ${stores.map(st=>`<div class="store-row"><span>${esc(st)}</span>${state.stores.length>1?`<button class="secondary" onclick="renameStore('${esc(st)}')">Rename</button><button class="secondary" onclick="deleteStore('${esc(st)}')">Delete</button>`:""}</div>`).join("")}
+    </div>
+    <div class="store-add">
+      <input id="newStoreName" placeholder="New store name" autocomplete="off">
+      <button class="primary" onclick="addStore()">Add store</button>
+    </div>
+    <div class="actions"><button class="secondary" onclick="closeModal()">Done</button></div>`;
+  openModal();
+  setTimeout(()=>document.getElementById("newStoreName")?.focus(),50);
+}
+function addStore(){
+  const input=document.getElementById("newStoreName");
+  const name=(input?.value||"").trim();
+  if(!name){alert("Please enter a store name.");return;}
+  const existing=state.stores.find(st=>st.toLowerCase()===name.toLowerCase());
+  if(existing){alert("That store already exists.");return;}
+  ensureStore(name);
+  save();
+  openStoreManager();
+}
+function renameStore(oldName){
+  const current=state.stores.find(st=>st===oldName);
+  if(!current)return;
+  const next=prompt("Rename store:",current);
+  if(next===null)return;
+  const name=next.trim();
+  if(!name||name===current)return;
+  if(state.stores.some(st=>st.toLowerCase()===name.toLowerCase())){alert("That store already exists.");return;}
+  state.stores=state.stores.map(st=>st===current?name:st);
+  if(state.routesByStore[current]){state.routesByStore[name]=state.routesByStore[current];delete state.routesByStore[current]}
+  if(state.pairsByStore[current]){state.pairsByStore[name]=state.pairsByStore[current];delete state.pairsByStore[current]}
+  state.items.forEach(x=>{
+    if(x.store===current)x.store=name;
+    if(x.shopStore===current)x.shopStore=name;
+  });
+  save();
+  openStoreManager();
+}
+function deleteStore(name){
+  if(state.stores.length<=1){alert("Keep at least one store.");return;}
+  const used=state.items.some(x=>x.store===name||x.shopStore===name);
+  if(used){alert(`"${name}" is currently assigned to one or more items. Reassign those items before deleting this store.`);return;}
+  if(!confirm(`Delete "${name}" from your store list?`))return;
+  state.stores=state.stores.filter(st=>st!==name);
+  delete state.routesByStore[name];
+  delete state.pairsByStore[name];
+  save();
+  openStoreManager();
+}
 function openAdd(){
   const cats=CATEGORIES;
   document.getElementById("sheet").innerHTML=`
     <h2>Add item</h2>
     <input id="aiName" placeholder="Item name" autocomplete="off">
     <label class="muted">Store</label>
-    <input id="aiStore" list="addStoreOptions" value="PAK'nSAVE" placeholder="Store name">
-    <datalist id="addStoreOptions">${state.stores.map(st=>`<option value="${esc(st)}"></option>`).join("")}</datalist>
+    <select id="aiStore" onchange="if(this.value==='__ADD_STORE__'){addStoreFromField('aiStore')}" >
+      ${state.stores.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"})).map(st=>`<option value="${esc(st)}" ${st==="PAK'nSAVE"?"selected":""}>${esc(st)}</option>`).join("")}
+      <option value="__ADD_STORE__">＋ Add new store…</option>
+    </select>
+    <button class="secondary" type="button" onclick="addStoreFromField('aiStore')">＋ Add new store</button>
     <select id="aiCat">
       ${cats.map(c=>`<option ${c==="Other"?"selected":""}>${esc(c)}</option>`).join("")}
     </select>
@@ -272,7 +362,8 @@ function openAdd(){
 function addItem(){
   const name=document.getElementById("aiName").value.trim();
   const cat=document.getElementById("aiCat").value;
-  const store=ensureStore(document.getElementById("aiStore").value);
+  const storeValue=document.getElementById("aiStore").value;
+  const store=ensureStore(storeValue!=="__ADD_STORE__"?storeValue:"PAK'nSAVE");
   const q=document.getElementById("aiQty").value;
   const u=document.getElementById("aiUnit").value;
   if(!name){alert("Please enter an item name.");return;}
@@ -299,8 +390,11 @@ function openShopItem(id){
       ${["each","bunch","kg","g","pack","bag","box","tin","jar","tub","bottle","loaf","tube","roll","pair","dozen","litre","ml"].map(u=>`<option ${u===(x.shopUnit||x.usualUnit) ? "selected" : ""}>${u}</option>`).join("")}
     </select>
     <label class="muted">Store</label>
-    <input id="siStore" list="shopStoreChoices" value="${esc(currentStore)}" placeholder="Store name">
-    <datalist id="shopStoreChoices">${state.stores.map(st=>`<option value="${esc(st)}"></option>`).join("")}</datalist>
+    <select id="siStore" onchange="if(this.value==='__ADD_STORE__'){addStoreFromField('siStore')}" >
+      ${state.stores.slice().sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:"base"})).map(st=>`<option value="${esc(st)}" ${st===currentStore?"selected":""}>${esc(st)}</option>`).join("")}
+      <option value="__ADD_STORE__">＋ Add new store…</option>
+    </select>
+    <button class="secondary" type="button" onclick="addStoreFromField('siStore')">＋ Add new store</button>
     <div class="actions">
       <button class="secondary" onclick="closeModal()">Cancel</button>
       <button class="primary" onclick="saveShopItem('${esc(id)}')">Save</button>
@@ -312,7 +406,8 @@ function saveShopItem(id){
   if(!x)return;
   x.shopQty=document.getElementById("siQty").value||"1";
   x.shopUnit=document.getElementById("siUnit").value;
-  x.shopStore=ensureStore(document.getElementById("siStore").value);
+  const shopStoreValue=document.getElementById("siStore").value;
+  x.shopStore=ensureStore(shopStoreValue!=="__ADD_STORE__"?shopStoreValue:(x.shopStore||x.store||"PAK'nSAVE"));
   x.selected=true;
   x.bought=false;
   save();closeModal();render();
