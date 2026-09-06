@@ -10,7 +10,7 @@
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f3f4f6;color:#111827}
 header{position:sticky;top:0;z-index:10;background:#111827;color:white;padding:14px 14px 10px;box-shadow:0 2px 10px #0002}
 h1{font-size:20px;margin:0 0 10px}.tabs{display:flex;gap:6px}.tab{flex:1;border:0;border-radius:10px;padding:10px;background:#374151;color:white;font-weight:700}.tab.active{background:white;color:#111827}
-main{max-width:760px;margin:auto;padding:12px 12px 100px}.bar{display:flex;gap:8px;align-items:center;margin-bottom:10px}.bar input{flex:1;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
+main{max-width:760px;margin:auto;padding:12px 12px 100px}.bar{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}.bar input{flex:1;min-width:180px;padding:12px;border:1px solid #d1d5db;border-radius:10px;font-size:16px}
 button{font:inherit}.primary{background:#111827;color:white;border:0;border-radius:10px;padding:12px 14px;font-weight:700}.secondary{background:white;border:1px solid #d1d5db;border-radius:10px;padding:10px 12px}
 .card{background:white;border-radius:14px;margin:8px 0;padding:12px;box-shadow:0 1px 4px #0001}.row{display:flex;align-items:center;gap:10px}.itemname{font-weight:700;flex:1}.cat{font-size:12px;color:#6b7280;margin-top:3px}
 .buy{width:42px;height:42px;border-radius:12px;border:2px solid #9ca3af;background:white;font-size:20px}.buy.done{background:#111827;color:white;border-color:#111827}.qty{display:flex;align-items:center;gap:5px}.qty input{width:54px;text-align:center;padding:7px;border:1px solid #d1d5db;border-radius:8px}.qty select{padding:7px;border:1px solid #d1d5db;border-radius:8px;background:white}
@@ -103,12 +103,15 @@ const KEY="pns-grocery-v1";
 const DEFAULT_STORES=["PAK'nSAVE","Woolworths","Specialty Store"];
 let state=JSON.parse(localStorage.getItem(KEY)||"null")||{
  items:BASE_ITEMS.map(x=>({...x,store:"PAK'nSAVE",selected:false,bought:false})),
- route:[], pairs:{}, shopStarted:null, stores:[...DEFAULT_STORES]
+ route:[], pairs:{}, shopStarted:null, stores:[...DEFAULT_STORES], categories:[...CATEGORIES]
 };
 // Migrate older saved lists that did not yet have store information.
 state.items.forEach(x=>{if(!x.store)x.store="PAK'nSAVE"; if(!x.shopStore)x.shopStore=x.store});
 if(!Array.isArray(state.stores))state.stores=[...DEFAULT_STORES];
 DEFAULT_STORES.forEach(st=>{if(!state.stores.includes(st))state.stores.push(st)});
+if(!Array.isArray(state.categories))state.categories=[...CATEGORIES];
+CATEGORIES.forEach(cat=>{if(!state.categories.some(c=>c.toLowerCase()===cat.toLowerCase()))state.categories.push(cat)});
+function categoryList(){ return state.categories.slice(); }
 if(!state.routesByStore){
   state.routesByStore={};
   if(Array.isArray(state.route)&&state.route.length)state.routesByStore["PAK'nSAVE"]=[...state.route];
@@ -172,15 +175,16 @@ function itemCard(x){
 function renderMaster(app){
  const groups={};
  state.items.forEach(x=>(groups[x.category]??=[]).push(x));
- const orderedGroups=CATEGORIES.filter(cat=>groups[cat]).map(cat=>[cat,groups[cat].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}))]);
- app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add Item</button><button class="primary" onclick="openStoreManager()">＋ Add Store</button></div>
- <p class="muted">Tap an item to include it in this week's shop. Quantities are saved automatically.</p>
- ${orderedGroups.map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
+ const orderedGroups=categoryList().map(cat=>[cat,(groups[cat]||[]).sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}))]);
+ app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add Item</button></div>
+ <div class="bar"><button class="secondary" onclick="openStoreManager()">＋ Add Store</button><button class="secondary" onclick="addCategory()">＋ Add Category</button></div>
+ <p class="muted">Tap an item to include it in this week's shop. Tap an item name to set quantity and store.</p>
+ ${orderedGroups.map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.length?arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
  <button class="buy ${x.selected?"done":""}" onclick="toggleSelect('${esc(x.id)}')">${x.selected?"✓":"+"}</button>
  <button class="itemname item-open" type="button" onclick="openShopItem('${esc(x.id)}')">${esc(x.name)}<div class="cat">${esc(x.shopQty)} ${esc(x.shopUnit)} · ${esc(x.shopStore||x.store||"PAK'nSAVE")}</div><div class="storetag">Tap item to set quantity & store</div></button>
  <button class="secondary" onclick="editItem('${esc(x.id)}')">Edit</button>
   <button class="secondary" onclick="deleteItem('${esc(x.id)}')">Delete</button>
- </div></div>`).join("")}</div>`).join("")}`;
+ </div></div>`).join(""):`<div class="muted">No items in this category yet.</div>`}</div>`).join("")}`;
  document.getElementById("search").oninput=e=>filterCards(e.target.value);
 }
 function renderRoute(app){
@@ -208,7 +212,7 @@ function editItem(id){
     <h2>Edit item</h2>
     <input id="eiName" value="${esc(x.name)}">
     <select id="eiCat">
-      ${CATEGORIES.map(c=>`<option ${c===x.category?"selected":""}>${esc(c)}</option>`).join("")}
+      ${categoryList().map(c=>`<option ${c===x.category?"selected":""}>${esc(c)}</option>`).join("")}
     </select>
     <label class="muted">Store</label>
     <select id="eiStore" onchange="if(this.value==='__ADD_STORE__'){addStoreFromField('eiStore')}" >
@@ -334,8 +338,32 @@ function deleteStore(name){
   save();
   openStoreManager();
 }
+function addCategory(){
+  document.getElementById("sheet").innerHTML=`
+    <h2>Add category</h2>
+    <p class="muted">Create a new category for your Master List. For example: Pet.</p>
+    <label class="muted" for="newCategoryName">Category name</label>
+    <input id="newCategoryName" type="text" placeholder="e.g. Pet" autocomplete="off">
+    <div class="actions">
+      <button class="secondary" type="button" onclick="closeModal()">Cancel</button>
+      <button class="primary" type="button" onclick="saveNewCategory()">Add category</button>
+    </div>`;
+  openModal();
+  setTimeout(()=>document.getElementById("newCategoryName")?.focus(),50);
+}
+function saveNewCategory(){
+  const input=document.getElementById("newCategoryName");
+  const clean=(input?.value||"").trim();
+  if(!clean){alert("Please enter a category name.");input?.focus();return;}
+  const existing=state.categories.find(c=>c.toLowerCase()===clean.toLowerCase());
+  if(existing){alert("That category already exists.");input?.focus();return;}
+  state.categories.push(clean);
+  save();
+  closeModal();
+  render();
+}
 function openAdd(){
-  const cats=CATEGORIES;
+  const cats=categoryList();
   document.getElementById("sheet").innerHTML=`
     <h2>Add item</h2>
     <input id="aiName" placeholder="Item name" autocomplete="off">
