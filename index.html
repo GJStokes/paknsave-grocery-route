@@ -173,7 +173,7 @@ function renderMaster(app){
  const groups={};
  state.items.forEach(x=>(groups[x.category]??=[]).push(x));
  const orderedGroups=CATEGORIES.filter(cat=>groups[cat]).map(cat=>[cat,groups[cat].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}))]);
- app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add</button><button class="secondary" onclick="openStoreManager()">Stores</button></div>
+ app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add Item</button><button class="primary" onclick="openStoreManager()">＋ Add Store</button></div>
  <p class="muted">Tap an item to include it in this week's shop. Quantities are saved automatically.</p>
  ${orderedGroups.map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
  <button class="buy ${x.selected?"done":""}" onclick="toggleSelect('${esc(x.id)}')">${x.selected?"✓":"+"}</button>
