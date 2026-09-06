@@ -143,10 +143,12 @@ function itemCard(x){
  </div></div>`;
 }
 function renderMaster(app){
- const groups={};state.items.forEach(x=>(groups[x.category]??=[]).push(x));
+ const groups={};
+ state.items.forEach(x=>(groups[x.category]??=[]).push(x));
+ const orderedGroups=CATEGORIES.filter(cat=>groups[cat]).map(cat=>[cat,groups[cat].sort((a,b)=>a.name.localeCompare(b.name,undefined,{sensitivity:"base"}))]);
  app.innerHTML=`<div class="bar"><input id="search" placeholder="Search master list…"><button class="primary" onclick="openAdd()">Add</button></div>
  <p class="muted">Tap an item to include it in this week's shop. Quantities are saved automatically.</p>
- ${Object.entries(groups).map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
+ ${orderedGroups.map(([cat,arr])=>`<div class="section"><h2>${esc(cat)}</h2>${arr.map(x=>`<div class="card item-card" data-name="${esc(x.name.toLowerCase())}"><div class="row">
  <button class="buy ${x.selected?"done":""}" onclick="toggleSelect('${esc(x.id)}')">${x.selected?"✓":"+"}</button>
  <div class="itemname">${esc(x.name)}<div class="cat">${esc(x.shopQty)} ${esc(x.shopUnit)} · usual ${esc(x.usualQty)} ${esc(x.usualUnit)}</div></div>
  <button class="secondary" onclick="editItem('${esc(x.id)}')">Edit</button>
